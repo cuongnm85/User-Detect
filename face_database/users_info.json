@@ -1,0 +1,29 @@
+{
+  "cuong": {
+    "name": "cuong",
+    "department": "abc",
+    "position": "abc",
+    "employee_id": "123",
+    "photo_path": "face_database\\photos\\cuong_20250718_105343.jpg",
+    "registered_date": "2025-07-18T10:53:43.737867",
+    "encoding_dim": 512
+  },
+  "hang": {
+    "name": "hang",
+    "department": "axx",
+    "position": "abc",
+    "employee_id": "002",
+    "photo_path": "face_database\\photos\\hang_20250718_113700.jpg",
+    "registered_date": "2025-07-18T11:37:00.676428",
+    "encoding_dim": 512
+  },
+  "Lanh": {
+    "name": "Lanh",
+    "department": "anc",
+    "position": "abc",
+    "employee_id": "09",
+    "photo_path": "face_database\\photos\\Lanh_20250718_132755.jpg",
+    "registered_date": "2025-07-18T13:27:55.812889",
+    "encoding_dim": 512
+  }
+}

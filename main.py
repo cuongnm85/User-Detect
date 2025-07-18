@@ -13,6 +13,7 @@ import cv2
 import numpy as np
 import pickle
 import json
+import time
 import torch
 import time
 import os
@@ -90,10 +91,7 @@ class AdvancedFaceTracker:
         self.motion_prediction_enabled = self.config['tracking'].get('motion_prediction', True)
         
         # Camera setup from config
-        self.cap = cv2.VideoCapture(self.config['camera']['device_id'])
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.config['camera']['width'])
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.config['camera']['height'])
-        self.cap.set(cv2.CAP_PROP_FPS, self.config['camera']['fps'])
+        self.setup_camera()
         
         # Performance monitoring
         self.frame_count = 0
@@ -155,6 +153,72 @@ class AdvancedFaceTracker:
         
         print(f"📚 Loaded {len(self.face_encodings)} face encodings")
         print(f"📋 Loaded {len(self.users_info)} user profiles")
+
+    def setup_camera(self):
+        """Setup camera input (webcam or RTSP)"""
+        input_type = self.config['camera'].get('input_type', 'webcam').lower()
+        
+        print(f"🎥 Setting up camera input: {input_type}")
+        
+        if input_type == 'rtsp':
+            rtsp_url = self.config['camera'].get('rtsp_url', '')
+            if not rtsp_url:
+                print("❌ RTSP URL not configured, falling back to webcam")
+                input_type = 'webcam'
+            else:
+                print(f"📡 Connecting to RTSP: {rtsp_url}")
+                self.cap = cv2.VideoCapture(rtsp_url)
+                
+                # Set buffer size for RTSP to reduce latency
+                buffer_size = self.config['camera'].get('buffer_size', 1)
+                self.cap.set(cv2.CAP_PROP_BUFFERSIZE, buffer_size)
+                
+                # Set connection timeout
+                timeout = self.config['camera'].get('connection_timeout', 10)
+                self.cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, timeout * 1000)
+        
+        if input_type == 'webcam' or not self.cap.isOpened():
+            if input_type == 'rtsp':
+                print("⚠️ RTSP connection failed, falling back to webcam")
+            
+            device_id = self.config['camera'].get('device_id', 0)
+            print(f"📹 Using webcam device: {device_id}")
+            self.cap = cv2.VideoCapture(device_id)
+        
+        if not self.cap.isOpened():
+            raise Exception("❌ Could not open camera input")
+        
+        # Set camera properties
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.config['camera']['width'])
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.config['camera']['height'])
+        self.cap.set(cv2.CAP_PROP_FPS, self.config['camera']['fps'])
+        
+        # Test read to verify connection
+        ret, test_frame = self.cap.read()
+        if ret:
+            print(f"✅ Camera input ready: {test_frame.shape[1]}x{test_frame.shape[0]}")
+        else:
+            raise Exception("❌ Could not read from camera input")
+
+    def reconnect_camera(self):
+        """Reconnect camera with retry logic"""
+        max_attempts = self.config['camera'].get('reconnect_attempts', 3)
+        
+        for attempt in range(max_attempts):
+            print(f"🔄 Reconnecting camera (attempt {attempt + 1}/{max_attempts})")
+            
+            if hasattr(self, 'cap') and self.cap:
+                self.cap.release()
+            
+            try:
+                self.setup_camera()
+                return True
+            except Exception as e:
+                print(f"⚠️ Reconnection attempt {attempt + 1} failed: {e}")
+                time.sleep(2)
+        
+        print("❌ All reconnection attempts failed")
+        return False
 
     def detect_faces_mediapipe(self, frame):
         """Detect faces using MediaPipe with NMS and motion blur handling"""
@@ -791,8 +855,13 @@ class AdvancedFaceTracker:
             if not paused:
                 ret, frame = self.cap.read()
                 if not ret:
-                    print("❌ Cannot read from camera!")
-                    break
+                    print("❌ Cannot read from camera! Attempting to reconnect...")
+                    if self.reconnect_camera():
+                        print("✅ Camera reconnected successfully")
+                        continue
+                    else:
+                        print("❌ Failed to reconnect camera, exiting...")
+                        break
                 
                 self.frame_count += 1
                 if self.config['camera']['flip_horizontal']:
