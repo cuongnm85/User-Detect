@@ -3,6 +3,7 @@
 🌐 HTTP Streaming Face Detection System
 Professional system with accurate face recognition
 Works with web browsers and VLC Media Player
+Optimized for Hikvision DS-2CD2043G0-I camera
 """
 
 import cv2

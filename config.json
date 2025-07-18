@@ -5,37 +5,40 @@
     "description": "Professional face recognition with GPU acceleration and multi-person tracking"
   },
   "camera": {
-    "input_type": "webcam",  
+    "input_type": "rtsp",  
     "device_id": 0,
     "rtsp_url": "rtsp://admin:Etc@1122@10.4.5.14:554/Streaming/Channels/101/",
-    "width": 1280,
-    "height": 720,
-    "fps": 25,
+    "width": 1920,
+    "height": 1080,
+    "fps": 15,
     "flip_horizontal": true,
-    "connection_timeout": 10,
-    "reconnect_attempts": 3,
-    "buffer_size": 1,
+    "connection_timeout": 15,
+    "reconnect_attempts": 5,
+    "buffer_size": 3,
     "multi_scale_detection": true,
-    "scale_factors": [1.0, 1.2],
-    "min_detection_area": 1600
+    "scale_factors": [1.0, 0.8, 0.6],
+    "min_detection_area": 1200,
+    "hikvision_optimization": true,
+    "stream_protocol": "tcp",
+    "read_timeout": 5000
   },
   "mediapipe": {
     "model_selection": 1,
-    "min_detection_confidence": 0.4,
-    "face_detection_confidence": 0.4,
-    "min_face_size": 40,
-    "max_aspect_ratio": 1.6,
-    "min_aspect_ratio": 0.7
+    "min_detection_confidence": 0.3,
+    "face_detection_confidence": 0.3,
+    "min_face_size": 30,
+    "max_aspect_ratio": 1.8,
+    "min_aspect_ratio": 0.6
   },
   "mtcnn": {
     "image_size": 160,
-    "margin": 10,
-    "min_face_size": 40,
-    "thresholds": [0.5, 0.6, 0.7],
-    "factor": 0.709,
+    "margin": 15,
+    "min_face_size": 30,
+    "thresholds": [0.4, 0.5, 0.6],
+    "factor": 0.609,
     "post_process": true,
     "keep_all": true,
-    "face_crop_margin": 15
+    "face_crop_margin": 20
   },
   "facenet": {
     "pretrained_model": "vggface2",
@@ -53,15 +56,15 @@
     "use_gpu": true
   },
   "recognition": {
-    "threshold": 0.5,
+    "threshold": 0.45,
     "cache_duration": 30,
-    "min_track_confidence": 0.2,
+    "min_track_confidence": 0.15,
     "duplicate_detection": true,
     "blacklist_enabled": true
   },
   "nms": {
-    "iou_threshold": 0.4,
-    "overlap_threshold": 0.4
+    "iou_threshold": 0.35,
+    "overlap_threshold": 0.35
   },
   "tracking": {
     "priority_weight_age": 0.1,
@@ -79,8 +82,10 @@
   },
   "performance": {
     "fps_update_interval": 24,
-    "max_tracks_display": 15,
-    "memory_cleanup_interval": 50
+    "max_tracks_display": 20,
+    "memory_cleanup_interval": 30,
+    "frame_skip": 1,
+    "roi_enabled": false
   },
   "ui": {
     "header_height": 120,

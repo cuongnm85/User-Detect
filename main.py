@@ -7,6 +7,7 @@
 - GPU acceleration with RTX 4090
 - Non-Maximum Suppression to reduce false positives
 - Temporal consistency for stable recognition
+- Optimized for Hikvision DS-2CD2043G0-I camera
 """
 
 import cv2
@@ -155,7 +156,7 @@ class AdvancedFaceTracker:
         print(f"📋 Loaded {len(self.users_info)} user profiles")
 
     def setup_camera(self):
-        """Setup camera input (webcam or RTSP)"""
+        """Setup camera input (webcam or RTSP) - optimized for Hikvision cameras"""
         input_type = self.config['camera'].get('input_type', 'webcam').lower()
         
         print(f"🎥 Setting up camera input: {input_type}")
@@ -167,15 +168,32 @@ class AdvancedFaceTracker:
                 input_type = 'webcam'
             else:
                 print(f"📡 Connecting to RTSP: {rtsp_url}")
-                self.cap = cv2.VideoCapture(rtsp_url)
+                
+                # Hikvision-specific optimizations
+                if self.config['camera'].get('hikvision_optimization', False):
+                    # Use TCP protocol for more stable connection with Hikvision
+                    if '?' in rtsp_url:
+                        rtsp_url += '&tcp'
+                    else:
+                        rtsp_url += '?tcp'
+                    print("🔧 Applied Hikvision TCP optimization")
+                
+                self.cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
+                
+                # Hikvision-specific settings
+                self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('H', '2', '6', '4'))
                 
                 # Set buffer size for RTSP to reduce latency
-                buffer_size = self.config['camera'].get('buffer_size', 1)
+                buffer_size = self.config['camera'].get('buffer_size', 3)
                 self.cap.set(cv2.CAP_PROP_BUFFERSIZE, buffer_size)
                 
                 # Set connection timeout
-                timeout = self.config['camera'].get('connection_timeout', 10)
+                timeout = self.config['camera'].get('connection_timeout', 15)
                 self.cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, timeout * 1000)
+                
+                # Set read timeout for Hikvision cameras
+                read_timeout = self.config['camera'].get('read_timeout', 5000)
+                self.cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, read_timeout)
         
         if input_type == 'webcam' or not self.cap.isOpened():
             if input_type == 'rtsp':
@@ -188,10 +206,18 @@ class AdvancedFaceTracker:
         if not self.cap.isOpened():
             raise Exception("❌ Could not open camera input")
         
-        # Set camera properties
+        # Set camera properties - optimized for Hikvision 4MP camera
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.config['camera']['width'])
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.config['camera']['height'])
         self.cap.set(cv2.CAP_PROP_FPS, self.config['camera']['fps'])
+        
+        # Additional Hikvision optimizations
+        if self.config['camera'].get('hikvision_optimization', False):
+            # Disable auto exposure for consistent performance
+            self.cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25)
+            # Set manual exposure for better face detection
+            self.cap.set(cv2.CAP_PROP_EXPOSURE, -6)
+            print("🔧 Applied Hikvision camera optimizations")
         
         # Test read to verify connection
         ret, test_frame = self.cap.read()
@@ -222,18 +248,25 @@ class AdvancedFaceTracker:
 
     def detect_faces_mediapipe(self, frame):
         """Detect faces using MediaPipe with multi-scale detection for small and distant faces"""
+        # Hikvision camera preprocessing
+        if self.config['camera'].get('hikvision_optimization', False):
+            frame = self.preprocess_hikvision_frame(frame)
+        
         all_detections = []
         
         # Multi-scale detection if enabled
         if self.config['camera'].get('multi_scale_detection', False):
-            scale_factors = self.config['camera'].get('scale_factors', [1.0, 1.5, 2.0])
+            scale_factors = self.config['camera'].get('scale_factors', [1.0, 0.8, 0.6])
             
             for scale in scale_factors:
                 # Resize frame for different scales
                 if scale != 1.0:
                     h, w = frame.shape[:2]
                     new_h, new_w = int(h * scale), int(w * scale)
-                    scaled_frame = cv2.resize(frame, (new_w, new_h))
+                    if new_h > 0 and new_w > 0:
+                        scaled_frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+                    else:
+                        continue
                 else:
                     scaled_frame = frame
                 
@@ -249,13 +282,31 @@ class AdvancedFaceTracker:
             all_detections = self.apply_nms(all_detections, self.config['nms']['iou_threshold'])
             
             # Limit detections for performance in multi-person scenarios
-            max_detections = 20  # Limit to 20 faces per frame
+            max_detections = 25  # Increased limit for 4MP camera
             if len(all_detections) > max_detections:
                 # Sort by confidence and keep top detections
                 all_detections.sort(key=lambda x: x[4], reverse=True)
                 all_detections = all_detections[:max_detections]
         
         return all_detections
+
+    def preprocess_hikvision_frame(self, frame):
+        """Preprocessing specifically for Hikvision DS-2CD2043G0-I camera"""
+        # Apply histogram equalization to improve contrast
+        lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
+        lab[:,:,0] = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8)).apply(lab[:,:,0])
+        frame = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+        
+        # Slight noise reduction while preserving edges
+        frame = cv2.bilateralFilter(frame, 5, 50, 50)
+        
+        # Enhance sharpness for better face detection
+        kernel = np.array([[-1,-1,-1],
+                          [-1, 9,-1],
+                          [-1,-1,-1]])
+        frame = cv2.filter2D(frame, -1, kernel * 0.1)
+        
+        return frame
 
     def _detect_faces_single_scale(self, frame, scale_factor=1.0):
         """Detect faces at single scale"""
@@ -888,7 +939,7 @@ class AdvancedFaceTracker:
             self.fps_start_time = current_time
 
     def run(self):
-        """Main tracking loop"""
+        """Main tracking loop - optimized for Hikvision cameras"""
         print("\n🎯 Starting Advanced Face Tracking System")
         print("📋 Controls:")
         print(f"   '{self.config['controls']['quit_key']}' - Quit")
@@ -897,6 +948,8 @@ class AdvancedFaceTracker:
         print(f"   '{self.config['controls']['pause_key'].upper()}' - Pause/Resume")
         
         paused = False
+        frame_skip_counter = 0
+        frame_skip = self.config['performance'].get('frame_skip', 1)
         
         while True:
             if not paused:
@@ -911,8 +964,29 @@ class AdvancedFaceTracker:
                         break
                 
                 self.frame_count += 1
+                frame_skip_counter += 1
+                
+                # Skip frames for performance with high-resolution Hikvision cameras
+                if frame_skip_counter % frame_skip != 0:
+                    continue
+                    
                 if self.config['camera']['flip_horizontal']:
                     frame = cv2.flip(frame, 1)
+                
+                # Hikvision frame optimization
+                if self.config['camera'].get('hikvision_optimization', False):
+                    # Skip processing if frame is too dark (common with Hikvision night mode)
+                    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                    avg_brightness = np.mean(gray)
+                    if avg_brightness < 30:  # Too dark for reliable face detection
+                        # Just display the frame with a warning
+                        cv2.putText(frame, "LOW LIGHT - Face detection disabled", 
+                                  (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
+                        cv2.imshow('Advanced Face Tracking System', frame)
+                        key = cv2.waitKey(1) & 0xFF
+                        if key == ord(self.config['controls']['quit_key']):
+                            break
+                        continue
                 
                 # Detect faces
                 detections = self.detect_faces_mediapipe(frame)
