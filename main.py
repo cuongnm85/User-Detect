@@ -221,7 +221,44 @@ class AdvancedFaceTracker:
         return False
 
     def detect_faces_mediapipe(self, frame):
-        """Detect faces using MediaPipe with NMS and motion blur handling"""
+        """Detect faces using MediaPipe with multi-scale detection for small and distant faces"""
+        all_detections = []
+        
+        # Multi-scale detection if enabled
+        if self.config['camera'].get('multi_scale_detection', False):
+            scale_factors = self.config['camera'].get('scale_factors', [1.0, 1.5, 2.0])
+            
+            for scale in scale_factors:
+                # Resize frame for different scales
+                if scale != 1.0:
+                    h, w = frame.shape[:2]
+                    new_h, new_w = int(h * scale), int(w * scale)
+                    scaled_frame = cv2.resize(frame, (new_w, new_h))
+                else:
+                    scaled_frame = frame
+                
+                # Process scaled frame
+                detections = self._detect_faces_single_scale(scaled_frame, scale)
+                all_detections.extend(detections)
+        else:
+            # Standard single-scale detection
+            all_detections = self._detect_faces_single_scale(frame, 1.0)
+        
+        # Apply NMS to all detections
+        if all_detections:
+            all_detections = self.apply_nms(all_detections, self.config['nms']['iou_threshold'])
+            
+            # Limit detections for performance in multi-person scenarios
+            max_detections = 20  # Limit to 20 faces per frame
+            if len(all_detections) > max_detections:
+                # Sort by confidence and keep top detections
+                all_detections.sort(key=lambda x: x[4], reverse=True)
+                all_detections = all_detections[:max_detections]
+        
+        return all_detections
+
+    def _detect_faces_single_scale(self, frame, scale_factor=1.0):
+        """Detect faces at single scale"""
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         
         # Apply slight gaussian blur to reduce motion blur artifacts
@@ -232,33 +269,43 @@ class AdvancedFaceTracker:
         detections = []
         if results.detections:
             h, w, _ = frame.shape
-            raw_detections = []
             
             for detection in results.detections:
                 confidence = detection.score[0]
                 
-                # Lower confidence threshold for fast motion
-                detection_threshold = self.config['mediapipe']['face_detection_confidence'] * 0.8
+                # Lower confidence threshold for distant/small faces
+                detection_threshold = self.config['mediapipe']['face_detection_confidence']
                 
                 if confidence > detection_threshold:
                     bbox = detection.location_data.relative_bounding_box
                     
-                    x = max(0, int(bbox.xmin * w))
-                    y = max(0, int(bbox.ymin * h))
-                    width = min(int(bbox.width * w), w - x)
-                    height = min(int(bbox.height * h), h - y)
+                    # Scale coordinates back to original frame size
+                    x = max(0, int(bbox.xmin * w / scale_factor))
+                    y = max(0, int(bbox.ymin * h / scale_factor))
+                    width = min(int(bbox.width * w / scale_factor), w - x)
+                    height = min(int(bbox.height * h / scale_factor), h - y)
                     
-                    # More lenient size and aspect ratio check for fast motion
-                    min_size = self.config['mediapipe']['min_face_size'] * 0.8
-                    min_ratio = self.config['mediapipe']['min_aspect_ratio'] * 0.8
-                    max_ratio = self.config['mediapipe']['max_aspect_ratio'] * 1.2
+                    # Check minimum detection area
+                    detection_area = width * height
+                    min_area = self.config['camera'].get('min_detection_area', 400)
                     
-                    if width > min_size and height > min_size and min_ratio <= width/height <= max_ratio:
-                        raw_detections.append([x, y, width, height, confidence])
-            
-            # Apply Non-Maximum Suppression with more lenient threshold
-            if raw_detections:
-                detections = self.apply_nms(raw_detections, self.config['nms']['iou_threshold'] * 1.2)
+                    # More lenient size and aspect ratio check
+                    min_size = self.config['mediapipe']['min_face_size']
+                    min_ratio = self.config['mediapipe']['min_aspect_ratio']
+                    max_ratio = self.config['mediapipe']['max_aspect_ratio']
+                    
+                    if (detection_area > min_area and 
+                        width > min_size and height > min_size and 
+                        min_ratio <= width/height <= max_ratio):
+                        detections.append([x, y, width, height, confidence])
+                        
+                        # Debug info
+                        if self.config['debug'].get('print_detection_info', False):
+                            print(f"✅ Face detected: {width}x{height} at ({x},{y}) conf={confidence:.2f} area={detection_area}")
+                    else:
+                        # Debug rejected detections
+                        if self.config['debug'].get('print_detection_info', False):
+                            print(f"❌ Face rejected: {width}x{height} area={detection_area} ratio={width/height:.2f}")
         
         return detections
     

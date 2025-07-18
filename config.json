@@ -5,45 +5,48 @@
     "description": "Professional face recognition with GPU acceleration and multi-person tracking"
   },
   "camera": {
-    "input_type": "rtsp",  
+    "input_type": "webcam",  
     "device_id": 0,
-    "rtsp_url": "rtsp://admin:password@192.168.1.100:554/stream",
+    "rtsp_url": "rtsp://admin:Etc@1122@10.4.5.14:554/Streaming/Channels/101/",
     "width": 1280,
     "height": 720,
-    "fps": 24,
+    "fps": 25,
     "flip_horizontal": true,
     "connection_timeout": 10,
     "reconnect_attempts": 3,
-    "buffer_size": 1
+    "buffer_size": 1,
+    "multi_scale_detection": true,
+    "scale_factors": [1.0, 1.2],
+    "min_detection_area": 1600
   },
   "mediapipe": {
     "model_selection": 1,
-    "min_detection_confidence": 0.6,
-    "face_detection_confidence": 0.6,
+    "min_detection_confidence": 0.4,
+    "face_detection_confidence": 0.4,
     "min_face_size": 40,
-    "max_aspect_ratio": 1.5,
-    "min_aspect_ratio": 0.6
+    "max_aspect_ratio": 1.6,
+    "min_aspect_ratio": 0.7
   },
   "mtcnn": {
     "image_size": 160,
-    "margin": 0,
+    "margin": 10,
     "min_face_size": 40,
-    "thresholds": [0.6, 0.7, 0.7],
+    "thresholds": [0.5, 0.6, 0.7],
     "factor": 0.709,
     "post_process": true,
     "keep_all": true,
-    "face_crop_margin": 10
+    "face_crop_margin": 15
   },
   "facenet": {
     "pretrained_model": "vggface2",
     "encoding_dimension": 512
   },
   "deepsort": {
-    "max_age": 8,
-    "n_init": 1,
-    "nms_max_overlap": 0.95,
-    "max_cosine_distance": 0.6,
-    "nn_budget": 200,
+    "max_age": 20,
+    "n_init": 2,
+    "nms_max_overlap": 0.7,
+    "max_cosine_distance": 0.4,
+    "nn_budget": 150,
     "embedder": "mobilenet",
     "half_precision": true,
     "bgr_format": true,
@@ -52,32 +55,32 @@
   "recognition": {
     "threshold": 0.5,
     "cache_duration": 30,
-    "min_track_confidence": 0.3,
+    "min_track_confidence": 0.2,
     "duplicate_detection": true,
     "blacklist_enabled": true
   },
   "nms": {
-    "iou_threshold": 0.3,
-    "overlap_threshold": 0.3
+    "iou_threshold": 0.4,
+    "overlap_threshold": 0.4
   },
   "tracking": {
-    "priority_weight_age": 0.05,
-    "priority_weight_confidence": 1.5,
-    "priority_bonus_recognized": 3.0,
-    "priority_penalty_unknown": 0.3,
-    "priority_penalty_missed": 0.1,
-    "max_age_bonus": 5,
-    "motion_prediction": false,
-    "max_motion_distance": 200,
-    "motion_weight": 0.9,
-    "kalman_noise": 0.03,
-    "prediction_frames": 8,
-    "smoothing_factor": 0.95
+    "priority_weight_age": 0.1,
+    "priority_weight_confidence": 2.0,
+    "priority_bonus_recognized": 5.0,
+    "priority_penalty_unknown": 0.2,
+    "priority_penalty_missed": 0.05,
+    "max_age_bonus": 8,
+    "motion_prediction": true,
+    "max_motion_distance": 150,
+    "motion_weight": 0.8,
+    "kalman_noise": 0.02,
+    "prediction_frames": 5,
+    "smoothing_factor": 0.9
   },
   "performance": {
     "fps_update_interval": 24,
-    "max_tracks_display": 10,
-    "memory_cleanup_interval": 100
+    "max_tracks_display": 15,
+    "memory_cleanup_interval": 50
   },
   "ui": {
     "header_height": 120,
@@ -108,9 +111,10 @@
     "pause_key": "space"
   },
   "debug": {
-    "print_duplicate_detection": true,
-    "print_track_reassignment": true,
-    "print_fps_updates": false,
-    "save_debug_images": false
+    "print_duplicate_detection": false,
+    "print_track_reassignment": false,
+    "print_fps_updates": true,
+    "save_debug_images": false,
+    "print_detection_info": false
   }
 }

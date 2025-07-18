@@ -152,18 +152,21 @@ class HTTPFaceDetector:
         # MediaPipe Face Detection
         mp_face_detection = mp.solutions.face_detection
         self.face_detector = mp_face_detection.FaceDetection(
-            model_selection=1,
-            min_detection_confidence=0.7
+            model_selection=self.config['mediapipe']['model_selection'],
+            min_detection_confidence=self.config['mediapipe']['min_detection_confidence']
         )
         
         # MTCNN and FaceNet
         self.mtcnn = MTCNN(
-            image_size=160, 
-            margin=0, 
+            image_size=self.config['mtcnn']['image_size'], 
+            margin=self.config['mtcnn']['margin'], 
+            min_face_size=self.config['mtcnn']['min_face_size'],
+            thresholds=self.config['mtcnn']['thresholds'],
+            factor=self.config['mtcnn']['factor'],
             device=self.device, 
-            keep_all=True
+            keep_all=self.config['mtcnn']['keep_all']
         )
-        self.facenet = InceptionResnetV1(pretrained='vggface2').eval().to(self.device)
+        self.facenet = InceptionResnetV1(pretrained=self.config['facenet']['pretrained_model']).eval().to(self.device)
         
         # DeepSORT tracker
         self.tracker = DeepSort(
@@ -264,7 +267,44 @@ class HTTPFaceDetector:
         return False
 
     def detect_faces_mediapipe(self, frame):
-        """Detect faces using MediaPipe with NMS"""
+        """Detect faces using MediaPipe with multi-scale detection for small and distant faces"""
+        all_detections = []
+        
+        # Multi-scale detection if enabled
+        if self.config['camera'].get('multi_scale_detection', False):
+            scale_factors = self.config['camera'].get('scale_factors', [1.0, 1.5, 2.0])
+            
+            for scale in scale_factors:
+                # Resize frame for different scales
+                if scale != 1.0:
+                    h, w = frame.shape[:2]
+                    new_h, new_w = int(h * scale), int(w * scale)
+                    scaled_frame = cv2.resize(frame, (new_w, new_h))
+                else:
+                    scaled_frame = frame
+                
+                # Process scaled frame
+                detections = self._detect_faces_single_scale(scaled_frame, scale)
+                all_detections.extend(detections)
+        else:
+            # Standard single-scale detection
+            all_detections = self._detect_faces_single_scale(frame, 1.0)
+        
+        # Apply NMS to all detections
+        if all_detections:
+            all_detections = self.apply_nms(all_detections, self.config['nms']['iou_threshold'])
+            
+            # Limit detections for performance in multi-person scenarios
+            max_detections = 20  # Limit to 20 faces per frame
+            if len(all_detections) > max_detections:
+                # Sort by confidence and keep top detections
+                all_detections.sort(key=lambda x: x[4], reverse=True)
+                all_detections = all_detections[:max_detections]
+        
+        return all_detections
+
+    def _detect_faces_single_scale(self, frame, scale_factor=1.0):
+        """Detect faces at single scale"""
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         rgb_frame = cv2.GaussianBlur(rgb_frame, (3, 3), 0.5)
         
@@ -273,24 +313,35 @@ class HTTPFaceDetector:
         detections = []
         if results.detections:
             h, w, _ = frame.shape
-            raw_detections = []
             
             for detection in results.detections:
                 confidence = detection.score[0]
                 
-                if confidence > 0.6:
+                # Use config threshold
+                detection_threshold = self.config['mediapipe']['face_detection_confidence']
+                
+                if confidence > detection_threshold:
                     bbox = detection.location_data.relative_bounding_box
                     
-                    x = max(0, int(bbox.xmin * w))
-                    y = max(0, int(bbox.ymin * h))
-                    width = min(int(bbox.width * w), w - x)
-                    height = min(int(bbox.height * h), h - y)
+                    # Scale coordinates back to original frame size
+                    x = max(0, int(bbox.xmin * w / scale_factor))
+                    y = max(0, int(bbox.ymin * h / scale_factor))
+                    width = min(int(bbox.width * w / scale_factor), w - x)
+                    height = min(int(bbox.height * h / scale_factor), h - y)
                     
-                    if width > 40 and height > 40 and 0.5 <= width/height <= 2.0:
-                        raw_detections.append([x, y, width, height, confidence])
-            
-            if raw_detections:
-                detections = self.apply_nms(raw_detections, 0.3)
+                    # Check minimum detection area
+                    detection_area = width * height
+                    min_area = self.config['camera'].get('min_detection_area', 400)
+                    
+                    # Use config values for size and ratio checks
+                    min_size = self.config['mediapipe']['min_face_size']
+                    min_ratio = self.config['mediapipe']['min_aspect_ratio']
+                    max_ratio = self.config['mediapipe']['max_aspect_ratio']
+                    
+                    if (detection_area > min_area and 
+                        width > min_size and height > min_size and 
+                        min_ratio <= width/height <= max_ratio):
+                        detections.append([x, y, width, height, confidence])
         
         return detections
 
