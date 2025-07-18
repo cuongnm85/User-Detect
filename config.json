@@ -1,0 +1,111 @@
+{
+  "system": {
+    "name": "GPU-Accelerated Advanced Face Tracking System",
+    "version": "2.0",
+    "description": "Professional face recognition with GPU acceleration and multi-person tracking"
+  },
+  "camera": {
+    "device_id": 0,
+    "width": 1280,
+    "height": 720,
+    "fps": 24,
+    "flip_horizontal": true
+  },
+  "mediapipe": {
+    "model_selection": 1,
+    "min_detection_confidence": 0.6,
+    "face_detection_confidence": 0.6,
+    "min_face_size": 40,
+    "max_aspect_ratio": 1.5,
+    "min_aspect_ratio": 0.6
+  },
+  "mtcnn": {
+    "image_size": 160,
+    "margin": 0,
+    "min_face_size": 40,
+    "thresholds": [0.6, 0.7, 0.7],
+    "factor": 0.709,
+    "post_process": true,
+    "keep_all": true,
+    "face_crop_margin": 10
+  },
+  "facenet": {
+    "pretrained_model": "vggface2",
+    "encoding_dimension": 512
+  },
+  "deepsort": {
+    "max_age": 8,
+    "n_init": 1,
+    "nms_max_overlap": 0.95,
+    "max_cosine_distance": 0.6,
+    "nn_budget": 200,
+    "embedder": "mobilenet",
+    "half_precision": true,
+    "bgr_format": true,
+    "use_gpu": true
+  },
+  "recognition": {
+    "threshold": 0.5,
+    "cache_duration": 30,
+    "min_track_confidence": 0.3,
+    "duplicate_detection": true,
+    "blacklist_enabled": true
+  },
+  "nms": {
+    "iou_threshold": 0.3,
+    "overlap_threshold": 0.3
+  },
+  "tracking": {
+    "priority_weight_age": 0.05,
+    "priority_weight_confidence": 1.5,
+    "priority_bonus_recognized": 3.0,
+    "priority_penalty_unknown": 0.3,
+    "priority_penalty_missed": 0.1,
+    "max_age_bonus": 5,
+    "motion_prediction": false,
+    "max_motion_distance": 200,
+    "motion_weight": 0.9,
+    "kalman_noise": 0.03,
+    "prediction_frames": 8,
+    "smoothing_factor": 0.95
+  },
+  "performance": {
+    "fps_update_interval": 24,
+    "max_tracks_display": 10,
+    "memory_cleanup_interval": 100
+  },
+  "ui": {
+    "header_height": 120,
+    "title": "ADVANCED FACE TRACKING SYSTEM",
+    "title_color": [0, 255, 255],
+    "background_color": [0, 0, 0],
+    "border_color": [255, 255, 255],
+    "text_color": [255, 255, 255],
+    "known_color": [0, 255, 0],
+    "unknown_color": [0, 0, 255],
+    "font_scale": {
+      "title": 1.0,
+      "stats": 0.5,
+      "labels": 0.5
+    },
+    "line_height": 20,
+    "label_padding": 10
+  },
+  "database": {
+    "encodings_file": "face_database/face_encodings.pkl",
+    "users_info_file": "face_database/users_info.json",
+    "photos_directory": "face_database/photos/"
+  },
+  "controls": {
+    "quit_key": "q",
+    "screenshot_key": "s",
+    "reset_key": "r",
+    "pause_key": "space"
+  },
+  "debug": {
+    "print_duplicate_detection": true,
+    "print_track_reassignment": true,
+    "print_fps_updates": false,
+    "save_debug_images": false
+  }
+}
